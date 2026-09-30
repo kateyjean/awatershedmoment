@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Katey Thompson's Backyard Laboratory </title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <header class="hero">
+        <h1>Katey Thompson's Backyard Laboratory</h1>
+        <p class="subtitle">"The river has great wisdom and whispers its secrets to the hearts of men." - Mark Twain, <i>Life on the Mississippi</i></p>
+        <div class="bio">
+            <p>I apply physics modeling, machine learning, data science, real-time telemetry pipelines, and geospatial analysis to understand water systems and physical environments—from large-scale watersheds to my own backyard. <a href="about.html">I also do other fun stuff.</a></p>
+        </div>
+    </header>
+
+    <main class="container">
+        
+        <section class="project-section">
+            <h2>Data & Computational Hydrology</h2>
+            <div class="grid">
+                
+                <div class="card core-tech">
+                    <h3>Physics-Informed ML for Streamflow Forecasting</h3>
+                    <span class="tag">Machine Learning</span>
+                    <p>Predicting streamflow discharge by embedding conservation of mass and water balance constraints directly into neural network loss functions using the CAMELS dataset.</p>
+                    <a href="#" class="btn">View Repo</a>
+                </div>
+
+                <div class="card core-tech">
+                    <h3>Real-Time Hydro-Telemetry Data Pipeline</h3>
+                    <span class="tag">Data Engineering</span>
+                    <p>An automated pipeline fetching real-time river gauge height data from the USGS API, streaming it into a time-series database, and visualizing metrics on a Grafana dashboard.</p>
+                    <a href="#" class="btn">View Repo</a>
+                </div>
+
+            </div>
+        </section>
+
+        <section class="project-section garden-section">
+            <h2>The Backyard Sandbox</h2>
+            <p class="section-intro">Where data meets dirt. Projects combining environmental modeling and observation in Port Saint John, FL.</p>
+            <div class="grid">
+
+                <div class="card hybrid">
+                    <h3>Local Yard Flood Delineation</h3>
+                    <span class="tag">Geospatial Python</span>
+                    <p>Using high-resolution LiDAR DEMs from NOAA Digital Coast and Python libraries (WhiteboxTools/RichDEM) to map topographical wetness and predict pooling zones in my yard.</p>
+                    <a href="#" class="btn">Case Study</a>
+                </div>
+
+                <div class="card personal">
+                    <h3>Other Projects</h3>
+                    <span class="tag">Software, Hardware, Gardening, DIY, and everything in between</span>
+                    <p>Projects ranging from a garden log to track how we put what we learned from the yard flooding study to use to an emulated Tandy CoCo 3. </p>
+                    <a href="other-projects.html" class="btn">View Garden Log</a>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <footer>
+        <p>&copy; 2026 | Powered by Netlify</p>
+    </footer>
+
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Something's Eating the Deer</title>
+<style>
+  :root { --bg:#1d2a24; --ink:#e8e2cf; --deer:#d9a441; --veg:#7fb069; --cat:#c4614a; --pred:#e8e2cf; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--ink); font:16px/1.5 Georgia, serif; }
+  main { max-width:720px; margin:0 auto; }
+  canvas { width:100%; background:#14201a; border-radius:6px; }
+  button, input { font:inherit; }
+  button { padding:8px 14px; background:var(--deer); border:0; border-radius:4px; cursor:pointer; }
+  #log { min-height:3em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Something's Eating the Deer</h1>
+  <canvas id="chart" width="720" height="320"></canvas>
+  <p>Tags this season: <input id="tags" type="range" min="0" max="10" value="2"> <span id="tagsN">2</span></p>
+  <button id="go">Run season</button>
+  <p id="log"></p>
+</main>
+
+<script>
+// ---------- 1. CONFIG ----------
+// Populations are scaled so vegetation carrying capacity K = 1.
+const P = { r:1.0, a:0.6, e:0.5, m:0.1, b:0.3, f:0.3, d:0.3, c:0.4 };
+const SECRET_S = 0.15;   // the skunk ape: hidden from the player's "expected" model
+const DT = 0.02, STEPS_PER_SEASON = 50;   // 1 season = 1.0 time units
+const DEER_PER_TAG = 0.02;                // how much herd one tag removes
+
+// ---------- 2. MODEL ----------
+// state = [V, D, Pn]; s = ape pressure (0 for the player's expected model)
+function deriv([V, D, Pn], s) {
+  return [
+    P.r*V*(1-V) - P.a*V*D,
+    P.e*P.a*V*D - P.m*D - P.b*D*Pn - P.c*D*s,
+    P.f*P.b*D*Pn - P.d*Pn
+  ];
+}
+function rk4(x, s, dt) {
+  const add = (u, k, h) => u.map((v, i) => v + h*k[i]);
+  const k1 = deriv(x, s);
+  const k2 = deriv(add(x, k1, dt/2), s);
+  const k3 = deriv(add(x, k2, dt/2), s);
+  const k4 = deriv(add(x, k3, dt), s);
+  return x.map((v, i) => v + dt/6*(k1[i] + 2*k2[i] + 2*k3[i] + k4[i]));
+}
+function runSeason(x, s) {
+  for (let i = 0; i < STEPS_PER_SEASON; i++) x = rk4(x, s, DT);
+  return x.map(v => Math.max(v, 0));
+}
+
+// ---------- 3. GAME STATE ----------
+const game = {
+  season: 0,
+  actual:   [0.6, 0.30, 0.05],   // what really happens (includes the ape)
+  expected: [0.6, 0.30, 0.05],   // what the player's model predicts (no ape)
+  history: []                    // {actual, expected} per season
+};
+game.history.push({ actual: game.actual, expected: game.expected });
+
+function playSeason(tags) {
+  const harvest = tags * DEER_PER_TAG;      // TODO: replace with shooting minigame result
+  game.actual   = runSeason(game.actual, SECRET_S);
+  game.expected = runSeason(game.expected, 0);
+  game.actual[1]   = Math.max(game.actual[1]   - harvest, 0);
+  game.expected[1] = Math.max(game.expected[1] - harvest, 0);
+  game.season++;
+  game.history.push({ actual: game.actual, expected: game.expected });
+  return game.expected[1] - game.actual[1];  // the "residual": missing deer
+}
+
+// ---------- 4. SHOOTING (stub) ----------
+// Projectile with quadratic drag and crosswind. Returns drop (m) at targetDist.
+function shot({ speed=800, angleDeg=0, dist=100, wind=0, k=0.001, dt=0.001 }) {
+  let x=0, y=0, z=0, t=0;
+  let vx = speed*Math.cos(angleDeg*Math.PI/180), vy = speed*Math.sin(angleDeg*Math.PI/180);
+  let vz = 0;
+  while (x < dist && t < 5) {
+    const rx = vx, ry = vy, rz = vz - wind;          // velocity relative to air
+    const v = Math.hypot(rx, ry, rz);
+    vx -= k*v*rx*dt;  vy -= (9.81 + k*v*ry)*dt;  vz -= k*v*rz*dt;
+    x += vx*dt; y += vy*dt; z += vz*dt; t += dt;
+  }
+  return { drop: y, drift: z, time: t };
+}
+// TODO: canvas aiming UI -> compare shot() landing point to deer vitals box -> score
+
+// ---------- 5. RENDER ----------
+function draw() {
+  const c = document.getElementById('chart'), g = c.getContext('2d');
+  const W = c.width, H = c.height, n = Math.max(game.history.length - 1, 10);
+  g.clearRect(0, 0, W, H);
+  const line = (pick, color, dash=[]) => {
+    g.strokeStyle = color; g.setLineDash(dash); g.lineWidth = 2; g.beginPath();
+    game.history.forEach((h, i) => {
+      const px = 20 + i/n*(W-40), py = H-20 - pick(h)*(H-40);
+      i ? g.lineTo(px, py) : g.moveTo(px, py);
+    });
+    g.stroke();
+  };
+  line(h => h.actual[0],   getVar('--veg'));
+  line(h => h.actual[1],   getVar('--deer'));
+  line(h => h.actual[2]*4, getVar('--cat'));            // panthers scaled x4 for visibility
+  line(h => h.expected[1], getVar('--pred'), [4, 4]);   // dashed: what your model says
+}
+const getVar = v => getComputedStyle(document.documentElement).getPropertyValue(v);
+
+// ---------- 6. WIRING ----------
+if (typeof document !== 'undefined') {
+  const tags = document.getElementById('tags');
+  tags.oninput = () => document.getElementById('tagsN').textContent = tags.value;
+  document.getElementById('go').onclick = () => {
+    const missing = playSeason(+tags.value);
+    document.getElementById('log').textContent =
+      `Season ${game.season}: ${missing.toFixed(3)} deer unaccounted for.`;
+    draw();
+  };
+  draw();
+}
+</script>
+</body>
+</html>
