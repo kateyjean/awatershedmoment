@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Something's Eating the Deer</title>
+<title>Deerly Departed</title>
 <style>
   :root { --bg:#1d2a24; --ink:#e8e2cf; --deer:#d9a441; --veg:#7fb069; --cat:#c4614a; --pred:#e8e2cf; }
   body { margin:0; padding:16px; background:var(--bg); color:var(--ink); font:16px/1.5 Georgia, serif; }
@@ -12,12 +12,14 @@
   button, input { font:inherit; }
   button { padding:8px 14px; background:var(--deer); border:0; border-radius:4px; cursor:pointer; }
   #log { min-height:3em; }
+  #game { image-rendering:pixelated}
 </style>
 </head>
 <body>
 <main>
-  <h1>Something's Eating the Deer</h1>
+  <h1>Deerly Departed</h1>
   <canvas id="chart" width="720" height="320"></canvas>
+  <canvas id="game" width="320" height="180"></canvas>
   <p>Tags this season: <input id="tags" type="range" min="0" max="10" value="2"> <span id="tagsN">2</span></p>
   <button id="go">Run season</button>
   <p id="log"></p>
@@ -58,10 +60,17 @@ const game = {
   season: 0,
   actual:   [0.6, 0.30, 0.05],   // what really happens (includes the ape)
   expected: [0.6, 0.30, 0.05],   // what the player's model predicts (no ape)
+  inventory: {bullets: 0, tags: 0, hasGun: 0, hasCamera: 0},
   history: []                    // {actual, expected} per season
 };
 game.history.push({ actual: game.actual, expected: game.expected });
 
+
+function applyEffect(effect){
+  for (const [item, amount] of Object.entries(effect)) {
+    game.inventory[item] = (game.inventory[item] ?? 0) + amount;
+  }
+}
 function playSeason(tags) {
   const harvest = tags * DEER_PER_TAG;      // TODO: replace with shooting minigame result
   game.actual   = runSeason(game.actual, SECRET_S);
@@ -71,6 +80,10 @@ function playSeason(tags) {
   game.season++;
   game.history.push({ actual: game.actual, expected: game.expected });
   return game.expected[1] - game.actual[1];  // the "residual": missing deer
+}
+function hogWild() {
+game.actual = runHogWild(game.actual)
+
 }
 
 // ---------- 4. SHOOTING (stub) ----------
@@ -85,6 +98,7 @@ function shot({ speed=800, angleDeg=0, dist=100, wind=0, k=0.001, dt=0.001 }) {
     vx -= k*v*rx*dt;  vy -= (9.81 + k*v*ry)*dt;  vz -= k*v*rz*dt;
     x += vx*dt; y += vy*dt; z += vz*dt; t += dt;
   }
+
   return { drop: y, drift: z, time: t };
 }
 // TODO: canvas aiming UI -> compare shot() landing point to deer vitals box -> score
@@ -108,7 +122,54 @@ function draw() {
   line(h => h.expected[1], getVar('--pred'), [4, 4]);   // dashed: what your model says
 }
 const getVar = v => getComputedStyle(document.documentElement).getPropertyValue(v);
+//----------- 5b. ENGINE ---------
+//----------- 5c. STORY-----------
+const STORY = {
+  title:[
+    {who: 'You', text: "Wildlife management officer? Deer hunting for money? Might as well give it a shot...."}
+  ],
+  intro:[
+    {who: 'GAME WARDEN', text: "So you're the new wildlife management officer."},
+    {who: 'GAME WARDEN', text: "You are responsible for the local deer herd near the swamp."},
+    {who: 'GAME WARDEN', text: "Keep an eye on the population target and your number of tags."},
+    {who: 'GAME WARDEN', text: "You can request up to 10 per season, but you only need 3 this year."},
+    {who: 'INFO', text: "Added +3 tags to inventory", give: {tags: 3}},
+    {who: 'You', text: "..."},
+    {who: 'GAME WARDEN', text: "OH, here is your rifle and some ammunition."},
+    {who: 'INFO', text: "Added Trusty 30-.06 to inventory", give: {hasGun: 1}},
+    {who: 'INFO', text: "Added +12 rounds to inventory", give: {bullets: 12}},
+    {who: 'GAME WARDEN', text: "Try to be a sure shot. The government only pays for 12 rounds per season."},
+    {who: 'You', text: "Thanks."},
+    {who: 'GAME WARDEN', text: "Go get 'em, tiger. And be sure to read over the rules if you haven't!"}
+  ],
+  rules: [],
+  huntonecutscene: [],
+  seasontwocutscene: [],
+  seasonthreecutscene: [],
+  seasonfourcutscene:[],
+  cameraseasoncutscene:[],
+  hoghuntcutscene: [],
+  lossconditionone:[],
+  lossconditiontwo: [],
+  endingone: [],
+  endingtwo: []
+}
+//----------- 5d. SCENES ---------
+const scenes = {}
+scenes.dialog = {
+  enter({id, next}){this.lines = STORY[id]; this.i = 0; this.shown =0; this.next = next;},
+  update(dt){this.shown += dt*40;},
+  onPress(){
+    const text = this.lines[this.i].text;
+    if (this.shown < text.length) this.shown = text.length;
+    else if (++this.i >= this.lines.length) go(this.next)
+    else this.shown = 0;
+  },
+  draw(ctx) {
+    scenes.field.draw(ctx);
+  }
 
+}
 // ---------- 6. WIRING ----------
 if (typeof document !== 'undefined') {
   const tags = document.getElementById('tags');
