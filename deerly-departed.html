@@ -123,6 +123,25 @@ function draw() {
 }
 const getVar = v => getComputedStyle(document.documentElement).getPropertyValue(v);
 //----------- 5b. ENGINE ---------
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = 320; canvas.height = 180;
+ctx.imageSmoothingEnabled = false;
+
+const scenes = {};
+let current;
+const go = (name, arg) => { current = scenes[name]; current.enter?.(arg); };
+
+let last = 0;
+function frame(t) {
+  const dt = Math.min((t - last) / 1000, 0.1); last = t;
+  current.update?.(dt);
+  ctx.clearRect(0, 0, 320, 180);
+  current.draw(ctx);
+  requestAnimationFrame(frame);
+}
+addEventListener('pointerdown', () => current.onPress?.());
+addEventListener('keydown', e => e.code === 'Space' && current.onPress?.());
 //----------- 5c. STORY-----------
 const STORY = {
   title:[
@@ -142,7 +161,9 @@ const STORY = {
     {who: 'You', text: "Thanks."},
     {who: 'GAME WARDEN', text: "Go get 'em, tiger. And be sure to read over the rules if you haven't!"}
   ],
-  rules: [],
+  rules: [
+    {who: 'INFO', text: "Use MOUSE to aim, and CLICK or SPACE to shoot."}
+  ],
   huntonecutscene: [],
   seasontwocutscene: [],
   seasonthreecutscene: [],
@@ -155,21 +176,43 @@ const STORY = {
   endingtwo: []
 }
 //----------- 5d. SCENES ---------
-const scenes = {}
 scenes.dialog = {
-  enter({id, next}){this.lines = STORY[id]; this.i = 0; this.shown =0; this.next = next;},
+  enter({id, next, bg}){this.lines = STORY[id]; this.i = 0; this.shown =0; this.next = next; this.bg = bg; this.showline(0);},
+  showline(i) {
+    this.i = i
+    this.shown = 0;
+    const line = this.lines[i];
+    if (line.give) applyEffect(line.give);
+  },
   update(dt){this.shown += dt*40;},
   onPress(){
     const text = this.lines[this.i].text;
     if (this.shown < text.length) this.shown = text.length;
-    else if (++this.i >= this.lines.length) go(this.next)
-    else this.shown = 0;
+    else if (this.i + 1 < this.lines.length) this.showline(this.i + 1)
+    else go(this.next);
   },
   draw(ctx) {
-    scenes.field.draw(ctx);
+    if (this.bg === 'office') {
+      ctx.fillStyle = '#5a4a3a'; ctx.fillRect(0, 0, 320, 180);
+    } else {
+      scenes[this.bg]?.draw(ctx);
+    }
   }
 
 }
+,
+scenes.title = {
+  draw(ctx){
+    scenes.title.draw(ctx);
+  },
+  onPress(){
+    go('dialog', {id: 'intro', next: 'hunt', bg: 'office'}); //in plain english (i hate js), go to scenes.dialog, with the STORY id being intro and the next one (to tell it what to go to once all the lines of dialog have run out) is hunt.
+  }
+},
+scenes.field = {},
+scenes.hunt = {},
+scenes.finale = {},
+scenes.hoghunt = {}
 // ---------- 6. WIRING ----------
 if (typeof document !== 'undefined') {
   const tags = document.getElementById('tags');
@@ -182,6 +225,8 @@ if (typeof document !== 'undefined') {
   };
   draw();
 }
+go('title');
+requestAnimationFrame(frame);
 </script>
 </body>
 </html>
