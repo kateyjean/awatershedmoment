@@ -31,7 +31,9 @@
 const P = { r:1.0, a:0.6, e:0.5, m:0.1, b:0.3, f:0.3, d:0.3, c:0.4 };
 const SECRET_S = 0.15;   // the skunk ape: hidden from the player's "expected" model
 const DT = 0.02, STEPS_PER_SEASON = 50;   // 1 season = 1.0 time units
-const DEER_PER_TAG = 0.02;                // how much herd one tag removes
+const DEER_PER_TAG = 0.02; // how much herd one tag removes
+const RUSTLE_CHANCE = 0.1;   // probability that a deer will disappear when hiding behind a bush
+               
 
 // ---------- 2. MODEL ----------
 // state = [V, D, Pn]; s = ape pressure (0 for the player's expected model)
@@ -60,6 +62,7 @@ const game = {
   season: 0,
   actual:   [0.6, 0.30, 0.05],   // what really happens (includes the ape)
   expected: [0.6, 0.30, 0.05],   // what the player's model predicts (no ape)
+  flags: { firstShotDone: false },
   inventory: {bullets: 0, tags: 0, hasGun: 0, hasCamera: 0},
   history: []                    // {actual, expected} per season
 };
@@ -82,10 +85,34 @@ function playSeason(tags) {
   return game.expected[1] - game.actual[1];  // the "residual": missing deer
 }
 function hogWild() {
-game.actual = runHogWild(game.actual)
+  game.actual = runHogWild(game.actual);
+}
+function startScatter() {
+  const first = !game.flags.firstShotDone;
+  for (const d of this.deer) d.hiding = first ? true : Math.random() < 0.6;
 
+  // guarantee at least one deer stays in the open, except on the first shot
+  if (!first && this.deer.every(d => d.hiding)) {
+    this.deer[Math.floor(Math.random() * this.deer.length)].hiding = false;
+  }
+
+  // each hidden deer has a chance not to come back
+  for (const d of this.deer) {
+    d.gone = d.hiding && (first || Math.random() < RUSTLE_CHANCE);
+  }
+  // first shot: make sure exactly one is gone, not "maybe one" per deer
+  game.flags.firstShotDone = true;
+  this.phase = 'scatter';
+  this.timer = 0;
 }
 
+function finishScatter(){
+  for (const d of this.deer) {
+    d.hiding = false;
+  }
+  this.phase = 'aim';
+}
+//TODO: updateDeer, aim(), fire() (calls aim and shot w/either camera or rifle)
 // ---------- 4. SHOOTING (stub) ----------
 // Projectile with quadratic drag and crosswind. Returns drop (m) at targetDist.
 function shot({ speed=800, angleDeg=0, dist=100, wind=0, k=0.001, dt=0.001 }) {
@@ -164,7 +191,6 @@ const STORY = {
   rules: [
     {who: 'INFO', text: "Use MOUSE to aim, and CLICK or SPACE to shoot."}
   ],
-  huntonecutscene: [],
   seasontwocutscene: [],
   seasonthreecutscene: [],
   seasonfourcutscene:[],
@@ -209,8 +235,45 @@ scenes.title = {
     go('dialog', {id: 'intro', next: 'hunt', bg: 'office'}); //in plain english (i hate js), go to scenes.dialog, with the STORY id being intro and the next one (to tell it what to go to once all the lines of dialog have run out) is hunt.
   }
 },
-scenes.field = {},
-scenes.hunt = {},
+scenes.field = {
+  draw(ctx){
+    scenes.field.draw(ctx);
+  },
+  onPress(){
+    go('hunt')
+    // Handle press event for the field scene
+  }
+},
+scenes.hunt = {
+  enter() {
+    this.phase = 'aim';
+    this.timer = 0;
+    //this.deer(); game.actual[1]
+  },
+  update(dt) {
+    if (this.phase === 'scatter') {
+      this.timer += dt;
+      if (this.timer > 1.5) this.finishScatter();
+    };
+  },
+  draw(ctx){
+    scenes.field.draw(ctx);  
+    //draw scene for this.phase
+  },
+  onPress(){
+    if (this.phase !== 'aim') return;
+    //fire shot (), 
+    applyEffect({ rounds: -1});
+    if (this.deer.position === shot.drop && shot.drift) {
+      applyEffect({tags: -1})
+      if (tags === 0) go('dialog', {id: 'seasontwocutscene', next: 'hunt', bg: 'office'})
+    };//idk, wherever the deer is)
+    if (rounds === 0 && tags !== 0) {
+      go('dialog', {id: 'lossconditionone', next: 'endingone'})
+    }
+    this.startScatter();
+  }
+},
 scenes.finale = {},
 scenes.hoghunt = {}
 // ---------- 6. WIRING ----------
