@@ -112,6 +112,11 @@ function finishScatter(){
   }
   this.phase = 'aim';
 }
+function updatePointer(e){
+  const r = canvas.getBoundingClientRect();
+  pointer.x = (e.clientX - r.left)* (canvas.width / r.width);
+  pointer.y = (e.clientY - r.top) * (canvas.height / r.height); 
+}
 //TODO: updateDeer, aim(), fire() (calls aim and shot w/either camera or rifle)
 // ---------- 4. SHOOTING (stub) ----------
 // Projectile with quadratic drag and crosswind. Returns drop (m) at targetDist.
@@ -132,7 +137,7 @@ function shot({ speed=800, angleDeg=0, dist=100, wind=0, k=0.001, dt=0.001 }) {
 
 // ---------- 5. RENDER ----------
 function draw() {
-  const c = document.getElementById('chart'), g = c.getContext('2d');
+  const c = document.getElementById('ctx'), g = c.getContext('2d');
   const W = c.width, H = c.height, n = Math.max(game.history.length - 1, 10);
   g.clearRect(0, 0, W, H);
   const line = (pick, color, dash=[]) => {
@@ -167,8 +172,12 @@ function frame(t) {
   current.draw(ctx);
   requestAnimationFrame(frame);
 }
-addEventListener('pointerdown', () => current.onPress?.());
+const pointer = {x: 0, y: 0};
+
+addEventListener('pointerdown', e => {updatePointer(e); current.onPress?.();});
 addEventListener('keydown', e => e.code === 'Space' && current.onPress?.());
+addEventListener('pointermove', updatePointer);
+
 //----------- 5c. STORY-----------
 const STORY = {
   title:[
@@ -178,8 +187,8 @@ const STORY = {
     {who: 'GAME WARDEN', text: "So you're the new wildlife management officer."},
     {who: 'GAME WARDEN', text: "You are responsible for the local deer herd near the swamp."},
     {who: 'GAME WARDEN', text: "Keep an eye on the population target and your number of tags."},
-    {who: 'GAME WARDEN', text: "You can request up to 10 per season, but you only need 3 this year."},
-    {who: 'INFO', text: "Added +3 tags to inventory", give: {tags: 3}},
+    {who: 'GAME WARDEN', text: "You can request up to 10 per season, but you only need 4 this year."},
+    {who: 'INFO', text: "Added +4 tags to inventory", give: {tags: 4}},
     {who: 'You', text: "..."},
     {who: 'GAME WARDEN', text: "OH, here is your rifle and some ammunition."},
     {who: 'INFO', text: "Added Trusty 30-.06 to inventory", give: {hasGun: 1}},
@@ -191,7 +200,24 @@ const STORY = {
   rules: [
     {who: 'INFO', text: "Use MOUSE to aim, and CLICK or SPACE to shoot."}
   ],
-  seasontwocutscene: [],
+  seasontwocutscene: [
+    {who: 'GAME WARDEN', text: "You're back...good job. Let's take a look at the population summary."},
+    {who: 'GAME WARDEN', text: () => 'You used 4 tags, so the herd population should be ${(game.actual[1]*100).toFixed(0)} head.'}, //expected value
+    {who: 'GAME WARDEN', text: () => 'Something is wrong...so the actual population is ${(game.actual[1]*100).toFixed(0)}!'}, //APE VALUE
+    {who: 'GAME WARDEN', text: "Panthers can't explain this. Did you harvest more than you had tags for?!"},
+    {who: 'You', text: "N-no! You can check my rounds!"},
+    {who: 'GAME WARDEN', text: "Hmmm...well, I guess you're telling the truth. Since we expected more deer, try requesting fewer tags this season"},
+    {who: 'GAME WARDEN', text: "Oh, and keep your eyes peeled for anything suspicious while you're out there. We need to get to the bottom of this."},
+    {who: 'GAME WARDEN', text: "Tell me how many tags you want and get back out there. Have a good season!",
+      choices:[
+        {text: 'One', give: {tags: 1 , goto: 'hunt'}},
+        {text: 'Two', give: {tags: 2 , goto: 'hunt'}},
+        {text: 'Three', give: {tags: 3 , goto: 'hunt'}},
+        {text: 'Four', give: {tags: 4 , goto: 'hunt'}},
+        {text: 'Five', give: {tags: 5 , goto: 'hunt'}}
+      ]
+    },
+  ],
   seasonthreecutscene: [],
   seasonfourcutscene:[],
   cameraseasoncutscene:[],
@@ -202,31 +228,54 @@ const STORY = {
   endingtwo: []
 }
 //----------- 5d. SCENES ---------
+const choiceRect = i => ({x: 20, y:70 + i * 16, w: 280, h: 14});
+const inRect = (p, r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 scenes.dialog = {
   enter({id, next, bg}){this.lines = STORY[id]; this.i = 0; this.shown =0; this.next = next; this.bg = bg; this.showline(0);},
   showline(i) {
     this.i = i
     this.shown = 0;
     const line = this.lines[i];
+    this.text = typeof line.text === 'function' ? line.text() : line.text;
     if (line.give) applyEffect(line.give);
   },
   update(dt){this.shown += dt*40;},
   onPress(){
-    const text = this.lines[this.i].text;
-    if (this.shown < text.length) this.shown = text.length;
-    else if (this.i + 1 < this.lines.length) this.showline(this.i + 1)
-    else go(this.next);
-  },
+    const text = this.text;
+    const line = this.lines[this.i];
+    if (this.shown < text.length) {this.shown = text.length; return;}
+    
+    if (line.choices){
+      const i = line.choices.findIndex((choice, num) => inRect(pointer, choiceRect(num)));
+      if (i === -1) return;
+      const choice = line.choices[i];
+      if (choice.give) applyEffect(choice.give);
+      if (STORY[choice.goto]) go('dialog', {id: choice.goto, next: this.next, bg: this.bg});
+      else go(choice.goto); 
+      return
+      }
+      if (this.i + 1 < this.lines.length) this.showline(this.i + 1)
+      else go(this.next);
+    },
   draw(ctx) {
     if (this.bg === 'office') {
       ctx.fillStyle = '#5a4a3a'; ctx.fillRect(0, 0, 320, 180);
     } else {
       scenes[this.bg]?.draw(ctx);
     }
+    const line = this.lines[this.i];
+    if (line.choices && this.shown >= this.text.length) {
+      line.choices.forEach((choice, i) => {
+        const r = choiceRect(i);
+        ctx.fillStyle = inRect(pointer, r) ? '#d9a441' : '#1d2a24';
+        ctx.fillRect(r.x, r.y, r.w, r.h);
+        ctx.fillStyle = '#e8e2cf';
+        ctx.fillText(choice.text, r.x + 4, r.y + 10);
+      });
+    }
   }
 
-}
-,
+},
 scenes.title = {
   draw(ctx){
     scenes.title.draw(ctx);
@@ -274,7 +323,14 @@ scenes.hunt = {
     this.startScatter();
   }
 },
-scenes.finale = {},
+scenes.finale = {
+  draw(ctx){
+    scenes.finale.draw(ctx);
+  },
+  onPress(){
+  go('title');
+},
+},
 scenes.hoghunt = {}
 // ---------- 6. WIRING ----------
 if (typeof document !== 'undefined') {
